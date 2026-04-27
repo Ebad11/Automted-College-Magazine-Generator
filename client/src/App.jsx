@@ -15,6 +15,7 @@ import MagazineBuilder from './pages/MagazineBuilder';
 import ActivityLog from './pages/ActivityLog';
 import AboutTeam from './pages/AboutTeam';
 import UserManagement from './pages/UserManagement';
+import PrintView from './pages/PrintView';
 
 const PAGE_TITLES = {
   '/dashboard': 'Dashboard',
@@ -94,7 +95,12 @@ function App() {
       {/* Lab Assistant only */}
       <Route path="/magazine" element={
         <ProtectedRoute roles={['lab_assistant']}>
-          <AppLayout path="/magazine"><MagazineBuilder /></AppLayout>
+          <MagazineBuilder />
+        </ProtectedRoute>
+      } />
+      <Route path="/magazine-print" element={
+        <ProtectedRoute roles={['lab_assistant']}>
+          <PrintView />
         </ProtectedRoute>
       } />
       <Route path="/users" element={

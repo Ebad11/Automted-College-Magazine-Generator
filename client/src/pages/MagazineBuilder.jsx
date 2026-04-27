@@ -1,278 +1,270 @@
-import { useEffect, useState, useRef } from 'react';
-import { motion } from 'framer-motion';
+import { useEffect, useState, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import api from '../api/axios';
 import toast from 'react-hot-toast';
-import HTMLFlipBook from 'react-pageflip';
-import { BookOpen, Download, RefreshCw, Layers, Eye, Star } from 'lucide-react';
+import { BookOpen, Save, Plus, Trash2, Eye, Layers, ChevronRight, GripVertical } from 'lucide-react';
+import '../styles/ZephyrTheme.css';
+import {
+  SectionIcon, typeMeta,
+  StandardEditor, MessageEditor, TabularEditor, EventsEditor, ArticlesEditor,
+} from '../components/MagEditorParts';
 
-const TEMPLATES = [
-  { id: 'classic', name: 'Classic Elegance', accent: '#6c63ff', bg: '#0a0a18' },
-  { id: 'vibrant', name: 'Vibrant Modern', accent: '#f72585', bg: '#0f0a14' },
-  { id: 'minimal', name: 'Minimal Clean', accent: '#4cc9f0', bg: '#080d14' },
+// Add Section Modal
+const ADD_TYPES = [
+  { type: 'standard', label: 'Text / Content', sub: 'Free-form text page' },
+  { type: 'tabular',  label: 'Tabular Data',   sub: 'AI-importable table (Excel/Word)' },
+  { type: 'articles', label: 'Article Gallery', sub: 'Student article collection' },
+  { type: 'events',   label: 'Events List',     sub: 'Events with descriptions' },
 ];
 
-// A single flipbook page
-const MagazinePage = ({ article, index, template, isCover }) => {
-  const pageStyle = {
-    background: isCover
-      ? `linear-gradient(135deg, ${template.bg}, ${template.accent}30)`
-      : '#fefefe',
-    color: isCover ? '#fff' : '#1a1a2e',
-    padding: '2rem',
-    height: '100%',
-    display: 'flex',
-    flexDirection: 'column',
-    fontFamily: 'Inter, sans-serif',
-    boxShadow: 'inset -4px 0 12px rgba(0,0,0,0.1)',
-    borderRight: `4px solid ${template.accent}40`,
-    overflow: 'hidden',
-  };
-
-  if (isCover) {
-    return (
-      <div style={pageStyle}>
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', textAlign: 'center' }}>
-          <div style={{ fontSize: '3rem', marginBottom: '0.5rem' }}>⭐</div>
-          <div style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.2em', opacity: 0.6, marginBottom: '1rem' }}>FCRIT Vashi</div>
-          <h1 style={{ fontSize: '2rem', fontWeight: 900, fontFamily: 'serif', lineHeight: 1.2, marginBottom: '0.5rem' }}>Annual College<br />Magazine</h1>
-          <div style={{ width: 40, height: 3, background: template.accent, borderRadius: 2, margin: '1rem auto' }} />
-          <div style={{ opacity: 0.7, fontSize: '0.9rem' }}>{new Date().getFullYear()}</div>
-        </div>
-        <div style={{ textAlign: 'center', opacity: 0.5, fontSize: '0.7rem' }}>FCRIT Magazine Generator Platform</div>
-      </div>
-    );
-  }
-
+const AddSectionModal = ({ onAdd, onClose }) => {
+  const [name, setName] = useState('');
+  const [type, setType] = useState('standard');
   return (
-    <div style={pageStyle}>
-      <div style={{ borderBottom: `2px solid ${template.accent}`, paddingBottom: '0.75rem', marginBottom: '1rem' }}>
-        <div style={{ fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.15em', color: template.accent, fontWeight: 700, marginBottom: '0.3rem' }}>
-          {article?.category} · {article?.department}
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+        style={{ background: '#1a1a20', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 14, padding: '2rem', width: 440 }}>
+        <h3 style={{ fontWeight: 700, marginBottom: '1.25rem', fontSize: '1.1rem' }}>Add New Section</h3>
+        <label className="mag-label">Section Name</label>
+        <input className="mag-input" value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Alumni Spotlight" style={{ marginBottom: '1rem' }} />
+        <label className="mag-label" style={{ marginBottom: '0.6rem' }}>Section Type</label>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1.5rem' }}>
+          {ADD_TYPES.map(t => (
+            <div key={t.type} onClick={() => setType(t.type)}
+              style={{ padding: '0.8rem 1rem', borderRadius: 8, border: `1px solid ${type === t.type ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.08)'}`, background: type === t.type ? 'rgba(255,255,255,0.08)' : 'transparent', cursor: 'pointer', display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+              <SectionIcon type={t.type} size={32} />
+              <div>
+                <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>{t.label}</div>
+                <div style={{ fontSize: '0.72rem', opacity: 0.45 }}>{t.sub}</div>
+              </div>
+            </div>
+          ))}
         </div>
-        <h2 style={{ fontSize: '1.1rem', fontWeight: 800, lineHeight: 1.3, color: '#1a1a2e' }}>{article?.title}</h2>
-        <div style={{ fontSize: '0.72rem', color: '#666', marginTop: '0.3rem' }}>
-          By {article?.author?.name} · {new Date(article?.createdAt).toLocaleDateString('en-IN')}
+        <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+          <button className="mag-btn mag-btn-ghost" onClick={onClose}>Cancel</button>
+          <button className="mag-btn mag-btn-primary" onClick={() => { if (!name.trim()) return toast.error('Enter a section name'); onAdd(name.trim(), type); onClose(); }}>
+            <Plus size={14} /> Add Section
+          </button>
         </div>
-      </div>
-      <p style={{ fontSize: '0.82rem', lineHeight: '1.75', color: '#333', flex: 1, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 18, WebkitBoxOrient: 'vertical' }}>
-        {article?.content}
-      </p>
-      <div style={{ marginTop: '1rem', fontSize: '0.65rem', color: '#999', textAlign: 'right' }}>
-        Page {index + 2} · {template.name}
-      </div>
+      </motion.div>
     </div>
   );
 };
 
-const MagazineBuilder = () => {
+// Main Smart Editor
+const SmartEditor = () => {
+  const [magazine, setMagazine] = useState(null);
   const [articles, setArticles] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [template, setTemplate] = useState(TEMPLATES[0]);
-  const [view, setView] = useState('builder'); // builder | flipbook
-  const [generating, setGenerating] = useState(false);
-  const flipRef = useRef();
+  const [activeSec, setActiveSec] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [showAdd, setShowAdd] = useState(false);
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const res = await api.get('/magazine/preview');
-        setArticles(res.data.articles);
-      } catch { toast.error('Failed to load articles.'); }
-      setLoading(false);
-    };
-    load();
-  }, []);
+  useEffect(() => { load(); }, []);
 
-  const handleFeature = async (articleId, isFeatured) => {
+  const load = async () => {
+    setLoading(true);
     try {
-      await api.patch(`/articles/${articleId}/feature`, { isFeatured: !isFeatured });
-      setArticles((prev) => prev.map((a) => a._id === articleId ? { ...a, isFeatured: !isFeatured } : a));
-      toast.success(isFeatured ? 'Removed from featured.' : 'Marked as featured!');
-    } catch { toast.error('Failed to update.'); }
+      const [mRes, aRes] = await Promise.all([api.get('/magazine/config'), api.get('/magazine/preview')]);
+      setMagazine(mRes.data.magazine);
+      setArticles(aRes.data.articles);
+      if (mRes.data.magazine.sections?.length) setActiveSec(mRes.data.magazine.sections[0]._id);
+    } catch { toast.error('Failed to load magazine.'); }
+    setLoading(false);
   };
 
-  const handleGenerate = async () => {
-    setGenerating(true);
+  const activeSection = magazine?.sections?.find(s => s._id === activeSec);
+
+  // Update active section locally (no save yet)
+  const handleSectionUpdate = useCallback((changes) => {
+    setMagazine(prev => ({
+      ...prev,
+      sections: prev.sections.map(s => s._id === activeSec ? { ...s, ...changes } : s)
+    }));
+  }, [activeSec]);
+
+  // Save a single section
+  const saveSection = async () => {
+    if (!activeSection) return;
+    setSaving(true);
     try {
-      await api.post('/magazine/generate', { templateName: template.name, articleCount: articles.length });
-      toast.success('Magazine generated! Switching to Flipbook view...');
-      setView('flipbook');
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Generation failed.');
-    }
-    setGenerating(false);
+      await api.patch(`/magazine/section/${activeSection._id}`, {
+        title: activeSection.title,
+        content: activeSection.content,
+        tableConfig: activeSection.tableConfig,
+        articles: activeSection.articles,
+        type: activeSection.type,
+      });
+      toast.success('Section saved!');
+    } catch { toast.error('Failed to save.'); }
+    setSaving(false);
   };
 
-  const handleDownload = async () => {
-    // Use print to PDF as html2canvas fallback
-    const printContent = `
-      <html>
-      <head><title>FCRIT Magazine ${new Date().getFullYear()}</title>
-      <style>
-        body { font-family: Georgia, serif; margin: 0; padding: 0; background: white; }
-        .cover { page-break-after: always; display: flex; align-items: center; justify-content: center; min-height: 100vh; text-align: center; background: linear-gradient(135deg, #6c63ff22, #fff); }
-        .article { page-break-after: always; padding: 3rem; min-height: 100vh; }
-        h1 { font-size: 2.5rem; color: #1a1a2e; } h2 { font-size: 1.5rem; color: #1a1a2e; }
-        .meta { color: #888; font-size: 0.85rem; margin-bottom: 1.5rem; }
-        .category { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em; color: ${template.accent}; font-weight: bold; }
-        p { line-height: 1.9; color: #333; font-size: 1rem; }
-        .divider { width: 40px; height: 3px; background: ${template.accent}; margin: 1rem 0; border-radius: 2px; }
-      </style></head><body>
-      <div class="cover"><div>
-        <div style="font-size:4rem">⭐</div>
-        <h1>Annual College Magazine</h1>
-        <div class="divider" style="margin:1rem auto"></div>
-        <p>FCRIT Vashi · ${new Date().getFullYear()}</p>
-      </div></div>
-      ${articles.map((a) => `
-        <div class="article">
-          <div class="category">${a.category} · ${a.department}</div>
-          <h2>${a.title}</h2>
-          <div class="meta">By ${a.author?.name} · ${new Date(a.createdAt).toLocaleDateString('en-IN')}</div>
-          <div class="divider"></div>
-          <p>${a.content.replace(/\n/g, '<br/>')}</p>
-        </div>
-      `).join('')}
-      </body></html>
-    `;
-    const w = window.open('', '_blank');
-    w.document.write(printContent);
-    w.document.close();
-    w.focus();
-    setTimeout(() => { w.print(); }, 500);
+  // Add a new section
+  const addSection = async (title, type) => {
+    try {
+      const res = await api.post('/magazine/section', { title, type });
+      setMagazine(res.data.magazine);
+      setActiveSec(res.data.section._id);
+      toast.success(`"${title}" added!`);
+    } catch { toast.error('Failed to add section.'); }
   };
+
+  // Delete a section
+  const deleteSection = async (sectionId) => {
+    if (!window.confirm('Delete this custom section?')) return;
+    try {
+      const res = await api.delete(`/magazine/section/${sectionId}`);
+      setMagazine(res.data.magazine);
+      const remaining = res.data.magazine.sections;
+      setActiveSec(remaining.length ? remaining[0]._id : null);
+      toast.success('Section removed.');
+    } catch (err) { toast.error(err.response?.data?.message || 'Cannot delete.'); }
+  };
+
+  if (loading) return (
+    <div className="mag-editor" style={{ alignItems: 'center', justifyContent: 'center' }}>
+      <div className="spinner" style={{ width: 36, height: 36 }} />
+    </div>
+  );
+
+  if (!magazine) return (
+    <div className="mag-editor" style={{ alignItems: 'center', justifyContent: 'center', gap: '1rem' }}>
+      <p style={{ opacity: 0.4 }}>Failed to load magazine configuration.</p>
+      <button className="mag-btn mag-btn-ghost" onClick={load}>Retry</button>
+    </div>
+  );
 
   return (
-    <div>
-      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
-        <h1 className="page-title">📖 Magazine Builder</h1>
-        <p className="page-subtitle">Select a template, feature articles, and generate the college magazine.</p>
-      </motion.div>
+    <div className="mag-editor">
+      {/* Header */}
+      <header className="mag-header">
+        <h1>
+          <BookOpen size={20} style={{ opacity: 0.6 }} />
+          {magazine.title}
+          <span className="mag-header-badge">Smart Editor</span>
+        </h1>
+        <div style={{ display: 'flex', gap: '0.6rem' }}>
+          <button className="mag-btn mag-btn-ghost" onClick={() => window.open('/magazine-print', '_blank')}>
+            <BookOpen size={14} /> Download PDF
+          </button>
+          <button className="mag-btn mag-btn-ghost" onClick={() => setShowAdd(true)}>
+            <Plus size={14} /> Add Section
+          </button>
+          <button className="mag-btn mag-btn-primary" onClick={saveSection} disabled={saving || !activeSection}>
+            {saving ? <div className="spinner" style={{ width: 14, height: 14, borderWidth: 2 }} /> : <Save size={14} />}
+            Save Section
+          </button>
+        </div>
+      </header>
 
-      {/* View toggle */}
-      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
-        <button id="view-builder" className={`btn ${view === 'builder' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setView('builder')}>
-          <Layers size={16} /> Builder
-        </button>
-        <button id="view-flipbook" className={`btn ${view === 'flipbook' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setView('flipbook')} disabled={articles.length === 0}>
-          <Eye size={16} /> Flipbook Preview
-        </button>
-        {articles.length > 0 && (
-          <>
-            <button id="generate-btn" className="btn btn-success" onClick={handleGenerate} disabled={generating} style={{ marginLeft: 'auto' }}>
-              {generating ? <div className="spinner" style={{ width: 18, height: 18, borderWidth: 2 }} /> : <><BookOpen size={16} /> Generate Magazine</>}
-            </button>
-            <button id="download-btn" className="btn btn-secondary" onClick={handleDownload}>
-              <Download size={16} /> Print / PDF
-            </button>
-          </>
-        )}
-      </div>
-
-      {view === 'builder' ? (
-        <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: '1.5rem' }}>
-          {/* Template selector */}
-          <div>
-            <motion.div className="glass-card" style={{ padding: '1.5rem' }} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}>
-              <div style={{ fontWeight: 700, marginBottom: '1rem', fontSize: '0.95rem' }}>Choose Template</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                {TEMPLATES.map((t) => (
-                  <button key={t.id} id={`template-${t.id}`}
-                    onClick={() => setTemplate(t)}
-                    style={{
-                      padding: '1rem', borderRadius: 'var(--radius-md)', border: `2px solid ${template.id === t.id ? t.accent : 'var(--border)'}`,
-                      background: template.id === t.id ? `${t.accent}15` : 'var(--bg-elevated)',
-                      cursor: 'pointer', textAlign: 'left', transition: 'var(--transition)',
-                      display: 'flex', alignItems: 'center', gap: '0.75rem',
-                    }}>
-                    <div style={{ width: 32, height: 32, borderRadius: 8, background: `linear-gradient(135deg, ${t.accent}, ${t.bg})`, border: `2px solid ${t.accent}60`, flexShrink: 0 }} />
-                    <div>
-                      <div style={{ fontWeight: 600, fontSize: '0.875rem', color: template.id === t.id ? t.accent : 'var(--text-primary)' }}>{t.name}</div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-              <div style={{ marginTop: '1.5rem', padding: '1rem', borderRadius: 'var(--radius-md)', background: 'rgba(6,214,160,0.08)', border: '1px solid rgba(6,214,160,0.2)' }}>
-                <div style={{ fontSize: '0.8rem', color: 'var(--success)', fontWeight: 600, marginBottom: '0.4rem' }}>✅ {articles.length} approved articles</div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                  {articles.filter((a) => a.isFeatured).length} featured articles
-                </div>
-              </div>
-            </motion.div>
+      <div className="mag-body">
+        {/* Sidebar */}
+        <aside className="mag-sidebar">
+          <div className="mag-sidebar-header">
+            <span>Sections ({magazine.sections.length})</span>
           </div>
-
-          {/* Article list */}
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.15 }}>
-            {loading ? (
-              <div style={{ display: 'flex', justifyContent: 'center', paddingTop: '4rem' }}><div className="spinner" /></div>
-            ) : articles.length === 0 ? (
-              <div className="glass-card empty-state">
-                <BookOpen size={48} style={{ margin: '0 auto 1rem', opacity: 0.3 }} />
-                <h3>No approved articles</h3>
-                <p style={{ marginTop: '0.5rem', fontSize: '0.9rem' }}>Approve student articles first to build the magazine.</p>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                {articles.map((a, i) => (
-                  <div key={a._id} className="glass-card" style={{ padding: '1.25rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                    <div style={{ width: 36, height: 36, borderRadius: 10, background: `${template.accent}20`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontWeight: 700, color: template.accent, fontSize: '0.8rem' }}>
-                      {i + 1}
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 600, fontSize: '0.9rem', marginBottom: '0.2rem' }}>{a.title}</div>
-                      <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{a.author?.name} · {a.department} · {a.category}</div>
-                    </div>
-                    <button id={`feature-${a._id}`}
-                      className={`btn btn-sm ${a.isFeatured ? 'btn-primary' : 'btn-secondary'}`}
-                      onClick={() => handleFeature(a._id, a.isFeatured)}
-                      title="Toggle featured">
-                      <Star size={14} fill={a.isFeatured ? 'currentColor' : 'none'} />
-                      {a.isFeatured ? 'Featured' : 'Feature'}
-                    </button>
+          <div className="mag-sidebar-list">
+            {magazine.sections.map(s => {
+              const m = typeMeta(s.type);
+              const isActive = s._id === activeSec;
+              return (
+                <div key={s._id} className={`mag-sec-item ${isActive ? 'active' : ''}`} onClick={() => setActiveSec(s._id)}>
+                  <SectionIcon type={s.type} size={28} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="sec-title">{s.title}</div>
+                    <div className="sec-badge">{m.label}{s.isFixed && <span className="mag-sec-fixed-tag"> · fixed</span>}</div>
                   </div>
-                ))}
+                  {!s.isFixed && (
+                    <button className="del-btn" onClick={e => { e.stopPropagation(); deleteSection(s._id); }}>
+                      <Trash2 size={12} />
+                    </button>
+                  )}
+                  <ChevronRight size={12} style={{ opacity: 0.25 }} />
+                </div>
+              );
+            })}
+          </div>
+          <button className="add-section-btn" onClick={() => setShowAdd(true)}>
+            <Plus size={14} /> Add Custom Section
+          </button>
+        </aside>
+
+        {/* Workspace */}
+        <main className="mag-workspace">
+          <AnimatePresence mode="wait">
+            {activeSection ? (
+              <motion.div key={activeSection._id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }} style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+                <div className="mag-workspace-header">
+                  {/* Editable section title */}
+                  <input
+                    value={activeSection.title}
+                    onChange={e => handleSectionUpdate({ title: e.target.value })}
+                    style={{ background: 'transparent', border: 'none', color: '#f0f0f5', fontFamily: "'Playfair Display', serif", fontSize: '2rem', fontWeight: 900, width: '100%', outline: 'none', marginBottom: '0.4rem' }}
+                  />
+                  <div className="sec-type-pill">
+                    <SectionIcon type={activeSection.type} size={16} />
+                    {typeMeta(activeSection.type).label} Section
+                    {activeSection.isFixed && <span style={{ opacity: 0.5 }}> · Standard (always included)</span>}
+                  </div>
+                </div>
+                <div className="mag-content-area">
+                  {activeSection.type === 'standard' && <StandardEditor section={activeSection} onUpdate={handleSectionUpdate} />}
+                  {activeSection.type === 'message' && <MessageEditor section={activeSection} onUpdate={handleSectionUpdate} />}
+                  {activeSection.type === 'tabular' && <TabularEditor section={activeSection} onUpdate={handleSectionUpdate} />}
+                  {activeSection.type === 'events' && <EventsEditor section={activeSection} onUpdate={handleSectionUpdate} />}
+                  {activeSection.type === 'articles' && <ArticlesEditor section={activeSection} articles={articles} onUpdate={handleSectionUpdate} />}
+                  {activeSection.type === 'cover' && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', height: '100%' }}>
+                      <div className="mag-page-preview zephyr-bg-pattern" style={{ flex: 1, minHeight: 450, background: '#0a0a0d', color: '#fff', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', textAlign: 'center', gap: '1rem', padding: '3rem', position: 'relative', overflow: 'hidden' }}>
+                        {/* Subtle background glow */}
+                        <div style={{ position: 'absolute', top: '-10%', left: '-10%', width: '120%', height: '120%', background: 'radial-gradient(circle at 50% 50%, rgba(139,92,246,0.1) 0%, transparent 60%)', pointerEvents: 'none' }} />
+                        <img src="/logo.png" alt="College Logo" style={{ width: '100px', height: '100px', objectFit: 'contain', marginBottom: '1rem', zIndex: 1 }} onError={(e) => { e.target.style.display = 'none'; }} />
+                        <div style={{ fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.4em', opacity: 0.7, zIndex: 1 }}>Fr. C. Rodrigues Institute of Technology</div>
+                        <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: '4rem', fontWeight: 900, letterSpacing: '0.08em', lineHeight: 1, textShadow: '0 4px 24px rgba(0,0,0,0.5)', margin: '0.5rem 0', zIndex: 1, background: 'linear-gradient(to right, #fff, #a78bfa)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>{magazine.title}</h1>
+                        <div style={{ width: 80, height: 2, background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.5), transparent)', margin: '0.5rem 0', zIndex: 1 }} />
+                        <div style={{ fontSize: '0.9rem', opacity: 0.8, letterSpacing: '0.1em', zIndex: 1, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <span>{magazine.year} ·</span>
+                          <input 
+                            value={activeSection.content?.subtitle || 'Department of Computer Engineering'} 
+                            onChange={(e) => handleSectionUpdate({ content: { ...(activeSection.content || {}), subtitle: e.target.value } })}
+                            style={{ background: 'transparent', border: 'none', color: 'inherit', borderBottom: '1px dashed rgba(255,255,255,0.3)', outline: 'none', textAlign: 'center', width: '250px', fontSize: 'inherit', letterSpacing: 'inherit' }}
+                          />
+                        </div>
+                      </div>
+                      <p style={{ fontSize: '0.78rem', opacity: 0.4, textAlign: 'center' }}>Save the provided logo image as "logo.png" in your client/public folder for it to appear.</p>
+                    </div>
+                  )}
+                  {activeSection.type === 'toc' && (
+                    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                      <p style={{ fontSize: '0.8rem', opacity: 0.5, marginBottom: '1rem' }}>Table of Contents is auto-generated from your sections list.</p>
+                      <div className="mag-page-preview zephyr-bg-dots" style={{ flex: 1, background: '#0a0a0d', color: '#fff' }}>
+                        <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: '1.8rem', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.5rem', color: '#fff' }}>Contents</h1>
+                        <div className="pg-rule" style={{ background: 'linear-gradient(90deg, #a78bfa, transparent)', height: '2px', border: 'none' }} />
+                        {magazine.sections.filter(s => s.type !== 'toc' && s.type !== 'cover').map((s, i) => (
+                          <div key={s._id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 0', borderBottom: '1px solid rgba(255,255,255,0.05)', fontSize: '0.9rem', color: '#ccc' }}>
+                            <span style={{ fontWeight: 500 }}>{s.title}</span>
+                            <span style={{ opacity: 0.4, fontSize: '0.8rem', fontFamily: 'monospace' }}>{String(i + 3).padStart(2, '0')}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            ) : (
+              <div className="mag-empty">
+                <Layers size={64} />
+                <p>Select a section from the sidebar to start editing</p>
               </div>
             )}
-          </motion.div>
-        </div>
-      ) : (
-        /* Flipbook view */
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flipbook-container"
-          style={{ flexDirection: 'column', gap: '1.5rem' }}>
-          <div style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', textAlign: 'center' }}>
-            🖱️ Click the pages or use arrows to flip
-          </div>
-          {articles.length > 0 ? (
-            <HTMLFlipBook
-              ref={flipRef}
-              width={380} height={520}
-              size="fixed"
-              minWidth={250} maxWidth={500}
-              minHeight={350} maxHeight={700}
-              showCover={true}
-              mobileScrollSupport={true}
-              style={{ boxShadow: '0 40px 80px rgba(0,0,0,0.6)' }}
-            >
-              {/* Cover */}
-              <div><MagazinePage isCover template={template} index={0} /></div>
-              {/* Article pages */}
-              {articles.map((article, i) => (
-                <div key={article._id}>
-                  <MagazinePage article={article} index={i} template={template} />
-                </div>
-              ))}
-            </HTMLFlipBook>
-          ) : (
-            <p style={{ color: 'var(--text-muted)' }}>No articles to display.</p>
-          )}
-          <div style={{ display: 'flex', gap: '1rem' }}>
-            <button className="btn btn-secondary" onClick={() => flipRef.current?.pageFlip().flipPrev()}>◀ Prev</button>
-            <button className="btn btn-secondary" onClick={() => flipRef.current?.pageFlip().flipNext()}>Next ▶</button>
-          </div>
-        </motion.div>
-      )}
+          </AnimatePresence>
+        </main>
+      </div>
+
+      {showAdd && <AddSectionModal onAdd={addSection} onClose={() => setShowAdd(false)} />}
     </div>
   );
 };
 
-export default MagazineBuilder;
+export default SmartEditor;
